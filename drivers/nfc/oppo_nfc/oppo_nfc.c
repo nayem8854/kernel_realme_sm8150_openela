@@ -72,7 +72,7 @@ static int nfc_read_func(struct seq_file *s, void *v)
 {
 	void *p = s->private;
 
-	switch((uint32_t)(p)) {
+	switch ((uint32_t)(unsigned long)p) {
 	case NFC_CHIPSET_VERSION:
 		seq_printf(s, "%s", current_chipset);
 		break;
@@ -142,7 +142,8 @@ static int oppo_nfc_probe(struct platform_device *pdev)
 		goto error_init;
 	}
 
-	p_entry = proc_create_data("chipset", S_IRUGO, nfc_info, &nfc_info_fops, (uint32_t *)(NFC_CHIPSET_VERSION));
+	p_entry = proc_create_data("chipset", S_IRUGO, nfc_info, &nfc_info_fops,
+				   (void *)(unsigned long)NFC_CHIPSET_VERSION);
 	if (!p_entry)
 	{
 		pr_err("%s, make chipset node fail", __func__);
