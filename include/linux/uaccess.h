@@ -301,4 +301,22 @@ static inline unsigned long user_access_save(void) { return 0UL; }
 static inline void user_access_restore(unsigned long flags) { }
 #endif
 
+
+/* Returns 1 if userspace buffer is zeroed, 0 if not, -EFAULT on fault. */
+static inline int check_zeroed_user(const void __user *from, size_t size)
+{
+	unsigned char c;
+
+	while (size) {
+		if (get_user(c, (unsigned char __user *)from))
+			return -EFAULT;
+		if (c)
+			return 0;
+		from++;
+		size--;
+	}
+	return 1;
+}
+
 #endif		/* __LINUX_UACCESS_H__ */
+

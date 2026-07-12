@@ -22,6 +22,9 @@
 #endif
 #define AT_VECTOR_SIZE (2*(AT_VECTOR_SIZE_ARCH + AT_VECTOR_SIZE_BASE + 1))
 
+/* Bitwise page-fault return type (from newer eBPF/mm glue; int on 4.14). */
+typedef int vm_fault_t;
+
 struct address_space;
 struct mem_cgroup;
 struct hmm;
@@ -406,6 +409,10 @@ struct mm_struct {
 	atomic_long_t nr_ptes;			/* PTE page table pages */
 #if CONFIG_PGTABLE_LEVELS > 2
 	atomic_long_t nr_pmds;			/* PMD page table pages */
+#endif
+#ifdef CONFIG_MMU
+	/* Unified page-table size accounting (OnePlus A16 eBPF/mm glue). */
+	atomic_long_t pgtables_bytes;
 #endif
 	int map_count;				/* number of VMAs */
 

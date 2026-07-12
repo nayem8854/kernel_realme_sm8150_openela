@@ -196,6 +196,11 @@ static inline ktime_t ktime_get_boottime(void)
 	return ktime_get_with_offset(TK_OFFS_BOOT);
 }
 
+static inline u64 ktime_get_boottime_ns(void)
+{
+	return ktime_to_ns(ktime_get_boottime());
+}
+
 /**
  * ktime_get_clocktai - Returns the TAI time of day in ktime_t format
  */

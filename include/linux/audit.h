@@ -117,6 +117,10 @@ struct filename;
 
 extern void audit_log_session_info(struct audit_buffer *ab);
 
+#ifndef AUDIT_OFF
+#define AUDIT_OFF 0
+#endif
+
 #ifdef CONFIG_AUDIT
 /* These are defined in audit.c */
 				/* Public API */
@@ -585,3 +589,12 @@ static inline void audit_log_string(struct audit_buffer *ab, const char *buf)
 }
 
 #endif
+
+static inline struct audit_context *audit_context(void)
+{
+#ifdef CONFIG_AUDITSYSCALL
+	return current->audit_context;
+#else
+	return NULL;
+#endif
+}

@@ -1794,11 +1794,17 @@ int __pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long address);
 static inline void mm_inc_nr_pmds(struct mm_struct *mm)
 {
 	atomic_long_add(PTRS_PER_PMD * sizeof(pmd_t), &mm->pgtables_bytes);
+#if CONFIG_PGTABLE_LEVELS > 2
+	atomic_long_inc(&mm->nr_pmds);
+#endif
 }
 
 static inline void mm_dec_nr_pmds(struct mm_struct *mm)
 {
 	atomic_long_sub(PTRS_PER_PMD * sizeof(pmd_t), &mm->pgtables_bytes);
+#if CONFIG_PGTABLE_LEVELS > 2
+	atomic_long_dec(&mm->nr_pmds);
+#endif
 }
 #endif
 
@@ -1816,11 +1822,13 @@ static inline unsigned long mm_pgtables_bytes(const struct mm_struct *mm)
 static inline void mm_inc_nr_ptes(struct mm_struct *mm)
 {
 	atomic_long_add(PTRS_PER_PTE * sizeof(pte_t), &mm->pgtables_bytes);
+	atomic_long_inc(&mm->nr_ptes);
 }
 
 static inline void mm_dec_nr_ptes(struct mm_struct *mm)
 {
 	atomic_long_sub(PTRS_PER_PTE * sizeof(pte_t), &mm->pgtables_bytes);
+	atomic_long_dec(&mm->nr_ptes);
 }
 #else
 
@@ -1833,6 +1841,16 @@ static inline unsigned long mm_pgtables_bytes(const struct mm_struct *mm)
 static inline void mm_inc_nr_ptes(struct mm_struct *mm) {}
 static inline void mm_dec_nr_ptes(struct mm_struct *mm) {}
 #endif
+
+/* Legacy nr_pmds helpers still used by debug/oom paths. */
+static inline unsigned long mm_nr_pmds(struct mm_struct *mm)
+{
+#if CONFIG_PGTABLE_LEVELS > 2
+	return atomic_long_read(&mm->nr_pmds);
+#else
+	return 0;
+#endif
+}
 
 int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address);
 int __pte_alloc_kernel(pmd_t *pmd, unsigned long address);

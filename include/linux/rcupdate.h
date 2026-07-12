@@ -173,6 +173,7 @@ static inline void rcu_init_nohz(void) { }
 		rcu_note_voluntary_context_switch_lite(t); \
 	} while (0)
 void call_rcu_tasks(struct rcu_head *head, rcu_callback_t func);
+#define call_rcu_tasks_trace call_rcu_tasks
 void synchronize_rcu_tasks(void);
 void exit_tasks_rcu_start(void);
 void exit_tasks_rcu_finish(void);

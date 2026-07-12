@@ -1082,3 +1082,4 @@ static inline long long atomic64_fetch_andnot_release(long long i, atomic64_t *v
 #include <asm-generic/atomic-long.h>
 
 #endif /* _LINUX_ATOMIC_H */
+#include <linux/atomic-compat-a16.h>
