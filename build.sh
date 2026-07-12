@@ -91,6 +91,154 @@ clean() {
     rm -rf "$OUT_DIR"
 }
 
+# KernelSU-Next kprobes mode omits ksu_input_hook, but selinux_hide.c
+# still references it on kernels >= 4.10 (linker: undefined symbol).
+# Always define the flag and clear it when the input hook stops.
+patch_ksu_input_hook() {
+    local f=""
+    for candidate in \
+        "KernelSU-Next/kernel/runtime/ksud_integration.c" \
+        "drivers/kernelsu/runtime/ksud_integration.c" \
+        "KernelSU-Next/kernel/ksud.c" \
+        "drivers/kernelsu/ksud.c"
+    do
+        if [[ -f "$candidate" ]]; then
+            f="$candidate"
+            break
+        fi
+    done
+
+    if [[ -z "$f" ]]; then
+        echo -e "${RED}KernelSU source not found; skip ksu_input_hook patch${NC}"
+        return 0
+    fi
+
+    if ! grep -q "bool ksu_input_hook" "$f"; then
+        echo -e "${RED}ksu_input_hook not present in $f; skip patch${NC}"
+        return 0
+    fi
+
+    # Already patched?
+    if grep -q "ksu_input_hook always defined for selinux_hide" "$f"; then
+        echo -e "${GREEN}ksu_input_hook patch already applied${NC}"
+        return 0
+    fi
+
+    python3 - "$f" <<'PY'
+import re, sys
+path = sys.argv[1]
+src = open(path, encoding="utf-8", errors="replace").read()
+orig = src
+marker = "/* ksu_input_hook always defined for selinux_hide */"
+
+def_re = re.compile(
+    r"^[ \t]*bool\s+ksu_input_hook\s+__read_mostly\s*=\s*true\s*;[ \t]*\n",
+    re.M,
+)
+
+def is_inside_else_of_kprobes(text, pos):
+    """True if pos sits in the #else branch of #ifdef KSU_KPROBES_HOOK."""
+    # Walk backward to nearest #ifdef KSU_KPROBES_HOOK / #else / #endif
+    before = text[:pos]
+    # Find last relevant preprocessor directive before pos
+    dirs = list(re.finditer(
+        r"^[ \t]*#(ifdef\s+KSU_KPROBES_HOOK|ifndef\s+KSU_KPROBES_HOOK|else|endif)\b",
+        before,
+        flags=re.M,
+    ))
+    if not dirs:
+        return False
+    last = dirs[-1]
+    kind = last.group(1)
+    if kind.startswith("else"):
+        # Confirm the matching open is KSU_KPROBES_HOOK
+        for d in reversed(dirs[:-1]):
+            k = d.group(1)
+            if k.startswith("endif"):
+                break
+            if "KSU_KPROBES_HOOK" in k:
+                return k.startswith("ifdef")  # #else of #ifdef KSU_KPROBES_HOOK
+            break
+    return False
+
+# 1) Ensure a file-scope definition is NOT only under #else of KPROBES_HOOK.
+if marker not in src:
+    matches = list(def_re.finditer(src))
+    need_hoist = False
+    if not matches:
+        need_hoist = True
+    else:
+        # If every definition is inside the kprobes #else, hoist one out.
+        need_hoist = all(is_inside_else_of_kprobes(src, m.start()) for m in matches)
+
+    if need_hoist:
+        # Drop only definitions that live under the kprobes #else branch.
+        parts = []
+        last = 0
+        for m in matches:
+            if is_inside_else_of_kprobes(src, m.start()):
+                parts.append(src[last:m.start()])
+                last = m.end()
+        parts.append(src[last:])
+        src = "".join(parts) if matches else src
+
+        # Insert after the include block (and any mid-include ifdefs).
+        includes = list(re.finditer(r"^#include[^\n]*\n", src, flags=re.M))
+        insert_at = includes[-1].end() if includes else 0
+        # Skip trailing #endif that closes an include guard ifdef.
+        tail = src[insert_at:insert_at + 200]
+        m_end = re.match(r"(?:\s*#endif[^\n]*\n)+", tail)
+        if m_end:
+            insert_at += m_end.end()
+        decl = f"\n{marker}\nbool ksu_input_hook __read_mostly = true;\n\n"
+        src = src[:insert_at] + decl + src[insert_at:]
+    # else: already has an unconditional definition (older ksud.c) — leave it
+
+# 2) Clear the flag in stop_input_hook() for the kprobes path so
+#    selinux_hide's wait loop can exit. Manual-hook (#else) already
+#    clears it; kprobes branch only unregisters the probe.
+def patch_stop_input(text):
+    m = re.search(
+        r"((?:static\s+)?void\s+stop_input_hook\s*\(\s*\)\s*\{)(.*?)(\n\})",
+        text,
+        flags=re.S,
+    )
+    if not m:
+        return text
+    body = m.group(2)
+    kprobes_ifdef = r"#ifdef\s+(?:CONFIG_)?KSU_KPROBES_HOOK\s*\n"
+    # Already cleared right after local decls in the kprobes branch?
+    if re.search(
+        kprobes_ifdef
+        + r"(?:[ \t]*static[^\n]*\n)*"
+        + r"[ \t]*ksu_input_hook\s*=\s*false\s*;",
+        body,
+    ):
+        return text
+    # Place after local decls to avoid -Werror=declaration-after-statement
+    body2, n = re.subn(
+        r"(" + kprobes_ifdef + r"(?:[ \t]*static[^\n]*\n)*)",
+        r"\1\tksu_input_hook = false;\n",
+        body,
+        count=1,
+    )
+    if n == 0:
+        # No kprobes branch — only patch if flag is never cleared
+        if "ksu_input_hook = false" in body:
+            return text
+        body2 = "\n\tksu_input_hook = false;" + body
+    return text[: m.start()] + m.group(1) + body2 + m.group(3) + text[m.end() :]
+
+src = patch_stop_input(src)
+
+if src == orig:
+    print(f"no changes needed for {path}")
+else:
+    open(path, "w", encoding="utf-8").write(src)
+    print(f"patched {path}")
+PY
+}
+
 install_ksu() {
 
     if [[ "$1" == "ksu" ]]; then
@@ -101,18 +249,27 @@ install_ksu() {
         "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
         | bash -s legacy
 
+        patch_ksu_input_hook
+
         DEFCONFIG_FILE="arch/arm64/configs/${CONFIG_FILE}"
 
         echo -e "${GREEN}Patching ${DEFCONFIG_FILE}${NC}"
 
+        # Remove obsolete/wrong option name from older builds
+        sed -i '/^CONFIG_KSU_KPROBE_HOOKS=/d' "$DEFCONFIG_FILE" 2>/dev/null || true
+
         grep -qxF "CONFIG_KPROBES=y" "$DEFCONFIG_FILE" || \
         echo "CONFIG_KPROBES=y" >> "$DEFCONFIG_FILE"
+
+        grep -qxF "CONFIG_KRETPROBES=y" "$DEFCONFIG_FILE" || \
+        echo "CONFIG_KRETPROBES=y" >> "$DEFCONFIG_FILE"
 
         grep -qxF "CONFIG_KPROBE_EVENTS=y" "$DEFCONFIG_FILE" || \
         echo "CONFIG_KPROBE_EVENTS=y" >> "$DEFCONFIG_FILE"
 
-        grep -qxF "CONFIG_KSU_KPROBE_HOOKS=y" "$DEFCONFIG_FILE" || \
-        echo "CONFIG_KSU_KPROBE_HOOKS=y" >> "$DEFCONFIG_FILE"
+        # Correct Kconfig symbol is CONFIG_KSU_KPROBES_HOOK (not KPROBE_HOOKS)
+        grep -qxF "CONFIG_KSU_KPROBES_HOOK=y" "$DEFCONFIG_FILE" || \
+        echo "CONFIG_KSU_KPROBES_HOOK=y" >> "$DEFCONFIG_FILE"
 
         grep -qxF "CONFIG_KSU=y" "$DEFCONFIG_FILE" || \
         echo "CONFIG_KSU=y" >> "$DEFCONFIG_FILE"
