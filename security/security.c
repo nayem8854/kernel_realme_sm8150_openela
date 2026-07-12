@@ -275,9 +275,11 @@ int security_capset(struct cred *new, const struct cred *old,
 }
 
 int security_capable(const struct cred *cred, struct user_namespace *ns,
-		     int cap)
+		     int cap, unsigned int opts)
 {
-	return call_int_hook(capable, 0, cred, ns, cap, SECURITY_CAP_AUDIT);
+	return call_int_hook(capable, 0, cred, ns, cap,
+			     (opts & CAP_OPT_NOAUDIT) ?
+			     SECURITY_CAP_NOAUDIT : SECURITY_CAP_AUDIT);
 }
 
 int security_capable_noaudit(const struct cred *cred, struct user_namespace *ns,

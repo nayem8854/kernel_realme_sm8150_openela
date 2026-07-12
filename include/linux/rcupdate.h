@@ -198,6 +198,9 @@ do { \
 		rcu_note_voluntary_context_switch(current); \
 } while (0)
 
+/* Compatibility alias for older callers (pre-tasks RCU rename) */
+#define cond_resched_rcu_qs() cond_resched_tasks_rcu_qs()
+
 /**
  * rcu_softirq_qs_periodic - Report RCU and RCU-Tasks quiescent states
  * @old_ts: jiffies at start of processing.

@@ -57,7 +57,14 @@ struct xattr;
 struct xfrm_sec_ctx;
 struct mm_struct;
 
+/* Default (no) options for the capable function */
+#define CAP_OPT_NONE 0x0
 /* If capable should audit the security request */
+#define CAP_OPT_NOAUDIT BIT(1)
+/* If capable is being called by a setid function */
+#define CAP_OPT_INSETID BIT(2)
+
+/* Legacy capable audit flags (mapped for older LSM hooks) */
 #define SECURITY_CAP_NOAUDIT 0
 #define SECURITY_CAP_AUDIT 1
 
@@ -215,7 +222,7 @@ int security_capset(struct cred *new, const struct cred *old,
 		    const kernel_cap_t *inheritable,
 		    const kernel_cap_t *permitted);
 int security_capable(const struct cred *cred, struct user_namespace *ns,
-			int cap);
+			int cap, unsigned int opts);
 int security_capable_noaudit(const struct cred *cred, struct user_namespace *ns,
 			     int cap);
 int security_quotactl(int cmds, int type, int id, struct super_block *sb);
@@ -479,9 +486,12 @@ static inline int security_capset(struct cred *new,
 }
 
 static inline int security_capable(const struct cred *cred,
-				   struct user_namespace *ns, int cap)
+				   struct user_namespace *ns, int cap,
+				   unsigned int opts)
 {
-	return cap_capable(cred, ns, cap, SECURITY_CAP_AUDIT);
+	return cap_capable(cred, ns, cap,
+			   (opts & CAP_OPT_NOAUDIT) ?
+			   SECURITY_CAP_NOAUDIT : SECURITY_CAP_AUDIT);
 }
 
 static inline int security_capable_noaudit(const struct cred *cred,
