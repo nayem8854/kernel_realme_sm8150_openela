@@ -98,7 +98,7 @@ install_ksu() {
         echo -e "${GREEN}Installing KernelSU-Next...${NC}"
 
         curl -LSs \
-        "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
+        "https://github.com/KernelSU-Next/KernelSU-Next/raw/13ad2b4cbdad7b14324a4f7867110bb86a8dc411/kernel/setup.sh" \
         | bash -s legacy
 
         DEFCONFIG_FILE="arch/arm64/configs/${CONFIG_FILE}"
