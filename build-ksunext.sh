@@ -60,10 +60,12 @@ make_defconfig()
     make -s ARCH=${ARCH} O=${OBJDIR} ${CONFIG_FILE} -j$(nproc --all)
 #    make -s ARCH=${ARCH} O=${OBJDIR} menuconfig
 }
+
 apply_ksunext_config()
 {
     cd ${KERNEL_DIR}
-    echo -e "${YELLOW}Applying KernelSU-Next v1.1.1 build config...${NC}"
+    echo -e "${YELLOW}Applying minimal KernelSU-Next v1.1.1 build config...${NC}"
+    echo -e "${YELLOW}Only CONFIG_KSU is forced; KernelSU-Next Kconfig decides the rest.${NC}"
 
     if ! [ -f "${OBJDIR}/.config" ]; then
         echo -e "${RED}${OBJDIR}/.config not found after defconfig. Aborting...${NC}"
@@ -71,59 +73,29 @@ apply_ksunext_config()
     fi
 
     if [ -x "${KERNEL_DIR}/scripts/config" ]; then
-        ${KERNEL_DIR}/scripts/config --file "${OBJDIR}/.config" \
-            -e KSU \
-            -d KSU_KPROBES_HOOK \
-            -d KSU_DEBUG \
-            -d KSU_ALLOWLIST_WORKAROUND \
-            -e KSU_LSM_SECURITY_HOOKS \
-            -e OVERLAY_FS
+        ${KERNEL_DIR}/scripts/config --file "${OBJDIR}/.config" -e KSU
     else
         sed -i \
             -e '/^CONFIG_KSU=/d' \
             -e '/^# CONFIG_KSU is not set/d' \
-            -e '/^CONFIG_KSU_KPROBES_HOOK=/d' \
-            -e '/^# CONFIG_KSU_KPROBES_HOOK is not set/d' \
-            -e '/^CONFIG_KSU_DEBUG=/d' \
-            -e '/^# CONFIG_KSU_DEBUG is not set/d' \
-            -e '/^CONFIG_KSU_ALLOWLIST_WORKAROUND=/d' \
-            -e '/^# CONFIG_KSU_ALLOWLIST_WORKAROUND is not set/d' \
-            -e '/^CONFIG_KSU_LSM_SECURITY_HOOKS=/d' \
-            -e '/^# CONFIG_KSU_LSM_SECURITY_HOOKS is not set/d' \
-            -e '/^CONFIG_OVERLAY_FS=/d' \
-            -e '/^# CONFIG_OVERLAY_FS is not set/d' \
             "${OBJDIR}/.config"
-        {
-            echo 'CONFIG_KSU=y'
-            echo '# CONFIG_KSU_KPROBES_HOOK is not set'
-            echo '# CONFIG_KSU_DEBUG is not set'
-            echo '# CONFIG_KSU_ALLOWLIST_WORKAROUND is not set'
-            echo 'CONFIG_KSU_LSM_SECURITY_HOOKS=y'
-            echo 'CONFIG_OVERLAY_FS=y'
-        } >> "${OBJDIR}/.config"
+        echo 'CONFIG_KSU=y' >> "${OBJDIR}/.config"
     fi
 
     make -s ARCH=${ARCH} O=${OBJDIR} olddefconfig -j$(nproc --all)
 
-    grep -nE '^CONFIG_KSU=|^# CONFIG_KSU_KPROBES_HOOK is not set|^CONFIG_KSU_LSM_SECURITY_HOOKS=|^CONFIG_OVERLAY_FS=' "${OBJDIR}/.config"
+    grep -nE '^CONFIG_KSU=|^CONFIG_KSU_KPROBES_HOOK=|^# CONFIG_KSU_KPROBES_HOOK is not set|^CONFIG_KSU_LSM_SECURITY_HOOKS=|^CONFIG_OVERLAY_FS=' "${OBJDIR}/.config" || true
 
     if ! grep -q '^CONFIG_KSU=y' "${OBJDIR}/.config"; then
         echo -e "${RED}CONFIG_KSU=y was not applied. Aborting...${NC}"
         exit 1
     fi
-    if ! grep -q '^# CONFIG_KSU_KPROBES_HOOK is not set' "${OBJDIR}/.config"; then
-        echo -e "${RED}CONFIG_KSU_KPROBES_HOOK is not disabled for manual hooks. Aborting...${NC}"
-        exit 1
-    fi
-    if ! grep -q '^CONFIG_KSU_LSM_SECURITY_HOOKS=y' "${OBJDIR}/.config"; then
-        echo -e "${RED}CONFIG_KSU_LSM_SECURITY_HOOKS=y was not applied. Aborting...${NC}"
-        exit 1
-    fi
     if ! grep -q '^CONFIG_OVERLAY_FS=y' "${OBJDIR}/.config"; then
-        echo -e "${RED}CONFIG_OVERLAY_FS=y was not applied. Aborting...${NC}"
+        echo -e "${RED}CONFIG_OVERLAY_FS=y is required by KernelSU but is not enabled. Aborting...${NC}"
         exit 1
     fi
 }
+
 compile()
 {
     cd ${KERNEL_DIR}
