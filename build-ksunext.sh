@@ -46,8 +46,8 @@ echo -e "${YELLOW}Using clang directory: $CLANG_DIR${NC}"
 export PATH="$CLANG_DIR/bin:$PATH"
 
 ##Installing necessary components
-! sudo apt-get install bc git gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig libssl-dev ccache cpio axel bc build-essential ccache curl device-tree-compiler pandoc libncurses5-dev lynx lz4 fakeroot xz-utils bc build-essential ccache curl device-tree-compiler pandoc lynx lz4 fakeroot xz-utils
-
+##sudo apt-get install bc git gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig libssl-dev ccache cpio axel bc build-essential ccache curl device-tree-compiler pandoc libncurses5-dev lynx lz4 fakeroot xz-utils bc build-essential ccache curl device-tree-compiler pandoc lynx lz4 fakeroot xz-utils
+git submodule update --init --recursive
 ##BUILD STARTED.....!!!
 make_defconfig()
 {
